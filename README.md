@@ -31,19 +31,18 @@ If you open `index.html` directly, the browser will not load the app correctly a
 
 ### 2) Create DB
 ```sql
-CREATE DATABASE xeytest; -- optional, backend now auto-creates if permission is granted
+CREATE DATABASE xeytest;
 ```
 
 ### 3) Backend
 ```bash
 cd backend
 cp .env.example .env
-# default DB user/password is postgres/itay0608
-# edit secrets if needed
+# edit DATABASE_URL/JWT secrets if needed
 npm install
 npm run dev
 ```
-Backend runs on `http://localhost:4000` and auto-creates missing DB/tables on startup when DB user has permission.
+Backend runs on `http://localhost:4000`.
 
 ### 4) Frontend
 Open a **second terminal**:
@@ -92,6 +91,7 @@ Expected:
 ```
 4. If backend cannot start, verify PostgreSQL is running and `DATABASE_URL` in `backend/.env` is correct.
 5. If ports are busy, change ports and keep frontend/backend URLs aligned.
+Frontend runs on `http://localhost:5173`.
 
 ## Feature walkthrough
 
@@ -107,6 +107,7 @@ Expected:
 3. Backend creates live stream and announces via websocket.
 4. Viewer selects stream from live list.
 5. WebRTC signaling is relayed by socket server; frontend uses browser-native RTCPeerConnection (no simple-peer) and broadcaster publishes a peer connection per viewer.
+5. WebRTC signaling is relayed by socket server; broadcaster publishes a peer connection per viewer.
 6. Viewer receives low-latency media stream in `video` element.
 7. Disconnects are handled; viewer count auto-updates; dead streams are cleaned when broadcaster disconnects.
 

@@ -7,24 +7,17 @@ import { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } from
 const REFRESH_COOKIE = 'refreshToken';
 
 export const register = asyncHandler(async (req, res) => {
-  const username = String(req.body.username || '').trim();
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '');
-  const role = req.body.role || 'viewer';
-
-  const existing = await findUserByEmail(email);
+  const { username, email, password, role } = req.body;
+  const existing = await findUserByEmail(email.toLowerCase());
   if (existing) return res.status(409).json({ error: 'Email already used' });
-
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await createUser({ username, email, passwordHash, role });
+  const user = await createUser({ username, email: email.toLowerCase(), passwordHash, role: role || 'viewer' });
   res.status(201).json({ user });
 });
 
 export const login = asyncHandler(async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '');
-
-  const user = await findUserByEmail(email);
+  const { email, password } = req.body;
+  const user = await findUserByEmail(email.toLowerCase());
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
@@ -33,7 +26,6 @@ export const login = asyncHandler(async (req, res) => {
   const accessToken = signAccessToken(safeUser);
   const refreshToken = signRefreshToken(safeUser);
   const expiresAt = new Date(Date.now() + Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30) * 24 * 60 * 60 * 1000);
-
   await createSession({
     userId: user.id,
     refreshTokenHash: hashToken(refreshToken),
@@ -49,7 +41,6 @@ export const login = asyncHandler(async (req, res) => {
 export const refresh = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies[REFRESH_COOKIE];
   if (!refreshToken) return res.status(401).json({ error: 'Missing refresh token' });
-
   let payload;
   try {
     payload = verifyRefreshToken(refreshToken);

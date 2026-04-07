@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Peer from 'simple-peer';
 import { socket } from '../services/socket';
 
 export default function ViewerPlayer({ stream }) {
@@ -24,12 +25,15 @@ export default function ViewerPlayer({ stream }) {
 
     const ensurePeer = () => {
       if (pcRef.current) return pcRef.current;
-
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
 
       pc.ontrack = (event) => {
         const [remoteStream] = event.streams;
-        if (videoRef.current) videoRef.current.srcObject = remoteStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = remoteStream;
+        }
         setStatus('playing');
       };
 
@@ -43,12 +47,12 @@ export default function ViewerPlayer({ stream }) {
 
       pc.onconnectionstatechange = () => {
         if (['failed', 'disconnected'].includes(pc.connectionState)) {
-          cleanupPeer();
           setStatus('reconnecting');
+          cleanupPeer();
           reconnectTimerRef.current = setTimeout(() => {
             setStatus('connecting');
             socket.emit('stream:joinViewer', { streamId: stream.id });
-          }, 1200);
+          }, 1500);
         }
       };
 
@@ -65,16 +69,17 @@ export default function ViewerPlayer({ stream }) {
         await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-
         socket.emit('webrtc:signal', {
           targetSocketId: fromSocketId,
           payload: { type: 'answer', sdp: answer.sdp }
         });
-      } else if (payload.type === 'candidate' && payload.candidate) {
+      }
+
+      if (payload.type === 'candidate' && payload.candidate) {
         try {
           await pc.addIceCandidate(payload.candidate);
         } catch {
-          // ignored
+          // ignore out-of-order candidate edge cases
         }
       }
     };
@@ -86,9 +91,10 @@ export default function ViewerPlayer({ stream }) {
       if (videoRef.current) videoRef.current.srcObject = null;
     };
 
-    setStatus('connecting');
     socket.on('webrtc:signal', onSignal);
     socket.on('stream:ended', onEnded);
+
+    setStatus('connecting');
     socket.emit('stream:joinViewer', { streamId: stream.id });
 
     return () => {
@@ -97,18 +103,53 @@ export default function ViewerPlayer({ stream }) {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       cleanupPeer();
       if (videoRef.current) videoRef.current.srcObject = null;
+  const peerRef = useRef(null);
+
+  useEffect(() => {
+    if (!stream) return;
+    let reconnectTimer;
+    const connect = () => {
+      setStatus('connecting');
+      socket.emit('stream:joinViewer', { streamId: stream.id });
+      const peer = new Peer({ initiator: false, trickle: true });
+      peerRef.current = peer;
+      peer.on('signal', (payload) => {
+        if (stream.streamerSocketId) socket.emit('webrtc:signal', { targetSocketId: stream.streamerSocketId, payload });
+      });
+      peer.on('stream', (media) => {
+        videoRef.current.srcObject = media;
+        setStatus('playing');
+      });
+      peer.on('error', () => {
+        setStatus('reconnecting');
+        reconnectTimer = setTimeout(connect, 2000);
+      });
+    };
+
+    const onSignal = ({ fromSocketId, payload }) => {
+      stream.streamerSocketId = fromSocketId;
+      peerRef.current?.signal(payload);
+    };
+    const onEnded = () => setStatus('ended');
+    socket.on('webrtc:signal', onSignal);
+    socket.on('stream:ended', onEnded);
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer);
+      socket.off('webrtc:signal', onSignal);
+      socket.off('stream:ended', onEnded);
+      peerRef.current?.destroy();
     };
   }, [stream?.id]);
 
-  if (!stream) {
-    return <div className="panel"><h3>Viewer</h3><p>Select a live stream to start watching.</p></div>;
-  }
+  if (!stream) return null;
 
   return (
-    <div className="panel video-wrap">
+    <div>
       <h3>Watching: {stream.title}</h3>
-      <video ref={videoRef} autoPlay playsInline controls muted={false} />
-      <div>Status: {status}</div>
+      <video ref={videoRef} autoPlay playsInline controls muted={false} style={{ width: 480 }} />
+      <div>{status}</div>
     </div>
   );
+  return <div><h3>Watching: {stream.title}</h3><video ref={videoRef} autoPlay playsInline controls muted={false} style={{ width: 480 }} /><div>{status}</div></div>;
 }
