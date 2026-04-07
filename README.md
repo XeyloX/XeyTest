@@ -91,6 +91,7 @@ Expected:
 ```
 4. If backend cannot start, verify PostgreSQL is running and `DATABASE_URL` in `backend/.env` is correct.
 5. If ports are busy, change ports and keep frontend/backend URLs aligned.
+Frontend runs on `http://localhost:5173`.
 
 ## Feature walkthrough
 
@@ -106,6 +107,7 @@ Expected:
 3. Backend creates live stream and announces via websocket.
 4. Viewer selects stream from live list.
 5. WebRTC signaling is relayed by socket server; frontend uses browser-native RTCPeerConnection (no simple-peer) and broadcaster publishes a peer connection per viewer.
+5. WebRTC signaling is relayed by socket server; broadcaster publishes a peer connection per viewer.
 6. Viewer receives low-latency media stream in `video` element.
 7. Disconnects are handled; viewer count auto-updates; dead streams are cleaned when broadcaster disconnects.
 

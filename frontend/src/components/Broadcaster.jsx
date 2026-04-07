@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Peer from 'simple-peer';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 
@@ -73,6 +74,20 @@ export default function Broadcaster({ token, user }) {
     socket.on('webrtc:signal', onSignal);
     socket.on('webrtc:viewerLeft', onLeft);
 
+  const peers = useRef(new Map());
+
+  useEffect(() => {
+    const onNewViewer = ({ streamId, viewerSocketId }) => {
+      if (!stream || stream.id !== streamId || !mediaRef.current) return;
+      const peer = new Peer({ initiator: true, trickle: true, stream: mediaRef.current });
+      peer.on('signal', (payload) => socket.emit('webrtc:signal', { targetSocketId: viewerSocketId, payload }));
+      peers.current.set(viewerSocketId, peer);
+    };
+    const onSignal = ({ fromSocketId, payload }) => peers.current.get(fromSocketId)?.signal(payload);
+    const onLeft = ({ viewerSocketId }) => { peers.current.get(viewerSocketId)?.destroy(); peers.current.delete(viewerSocketId); };
+    socket.on('webrtc:newViewer', onNewViewer);
+    socket.on('webrtc:signal', onSignal);
+    socket.on('webrtc:viewerLeft', onLeft);
     return () => {
       socket.off('webrtc:newViewer', onNewViewer);
       socket.off('webrtc:signal', onSignal);
@@ -97,6 +112,8 @@ export default function Broadcaster({ token, user }) {
     for (const pc of peersRef.current.values()) pc.close();
     peersRef.current.clear();
 
+    for (const p of peers.current.values()) p.destroy();
+    peers.current.clear();
     setStream(null);
   }
 
@@ -110,4 +127,9 @@ export default function Broadcaster({ token, user }) {
       {!stream ? <button onClick={start}>Start stream</button> : <button onClick={stop}>Stop stream #{stream.id}</button>}
     </div>
   );
+  return <div><h3>Broadcast</h3>
+    <input value={title} onChange={(e)=>setTitle(e.target.value)} />
+    <input value={category} onChange={(e)=>setCategory(e.target.value)} />
+    {!stream ? <button onClick={start}>Start stream</button> : <button onClick={stop}>Stop stream #{stream.id}</button>}
+  </div>;
 }
