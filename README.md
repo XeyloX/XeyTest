@@ -9,6 +9,13 @@ A full-stack live streaming platform with:
 - JWT auth + refresh sessions
 - Followers, stream discovery, notifications, chat moderation
 
+## IMPORTANT: Why `index.html` looked blank
+
+This project is a **Vite + React app**. You cannot open `frontend/index.html` directly from disk (double-click / `file://...`).
+It must be served by the Vite dev server so ES modules and React bundling work.
+
+If you open `index.html` directly, the browser will not load the app correctly and you'll see a blank page.
+
 ## Project structure
 
 - `backend/`
@@ -38,11 +45,52 @@ npm run dev
 Backend runs on `http://localhost:4000`.
 
 ### 4) Frontend
+Open a **second terminal**:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Then open:
+- `http://localhost:5173`
+
+Do **not** open `frontend/index.html` directly.
+
+## Quick start (copy/paste)
+
+### Terminal 1
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+### Terminal 2
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Browser
+Open `http://localhost:5173`.
+
+## Troubleshooting blank page
+
+1. Verify frontend dev server is running and you are using `http://localhost:5173`.
+2. Open browser DevTools Console:
+   - If you see failed network calls to `http://localhost:4000`, start backend.
+3. Check backend health:
+```bash
+curl http://localhost:4000/health
+```
+Expected:
+```json
+{"ok":true}
+```
+4. If backend cannot start, verify PostgreSQL is running and `DATABASE_URL` in `backend/.env` is correct.
+5. If ports are busy, change ports and keep frontend/backend URLs aligned.
 Frontend runs on `http://localhost:5173`.
 
 ## Feature walkthrough
@@ -58,6 +106,7 @@ Frontend runs on `http://localhost:5173`.
 2. Browser captures camera/mic using MediaDevices.
 3. Backend creates live stream and announces via websocket.
 4. Viewer selects stream from live list.
+5. WebRTC signaling is relayed by socket server; frontend uses browser-native RTCPeerConnection (no simple-peer) and broadcaster publishes a peer connection per viewer.
 5. WebRTC signaling is relayed by socket server; broadcaster publishes a peer connection per viewer.
 6. Viewer receives low-latency media stream in `video` element.
 7. Disconnects are handled; viewer count auto-updates; dead streams are cleaned when broadcaster disconnects.
